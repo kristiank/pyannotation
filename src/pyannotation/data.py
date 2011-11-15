@@ -9,7 +9,6 @@ Elan's .eaf files, Kura's .xml file, Toolbox's .txt files etc.
 
 import os, glob
 import re
-import regex
 
 # file types
 (EAF, EAFFROMTOOLBOX, KURA, TOOLBOX) = range(4)
@@ -426,9 +425,9 @@ class AnnotationTreeFilter(object):
         
         # filter by utterance
         if self.filter["utterance"] != "":
-            match = regex.search(self.filter["utterance"], ilElement[1])
+            match = re.search(self.filter["utterance"], ilElement[1])
             if match:
-                self.matchobject["utterance"][ilElement[0]] = [ [m.start(), m.end()] for m in regex.finditer(self.filter["utterance"], ilElement[1]) ]
+                self.matchobject["utterance"][ilElement[0]] = [ [m.start(), m.end()] for m in re.finditer(self.filter["utterance"], ilElement[1]) ]
                 utteranceMatch = True
         elif self.boolean_operation == self.AND:
             utteranceMatch = True
@@ -436,9 +435,9 @@ class AnnotationTreeFilter(object):
         # filter by translation
         if self.filter["translation"] != "":
             for translation in ilElement[3]:
-                match = regex.search(self.filter["translation"], translation[1])
+                match = re.search(self.filter["translation"], translation[1])
                 if match:
-                    self.matchobject["translation"][translation[0]] = [ [m.start(), m.end()] for m in regex.finditer(self.filter["translation"], translation[1]) ]
+                    self.matchobject["translation"][translation[0]] = [ [m.start(), m.end()] for m in re.finditer(self.filter["translation"], translation[1]) ]
                     translationMatch = True
         elif self.boolean_operation == self.AND:
             translationMatch = True
@@ -446,7 +445,7 @@ class AnnotationTreeFilter(object):
         # filter by word
         for word in ilElement[2]:
             if self.filter["word"] != "":
-                match =  regex.search(self.filter["word"], word[1])
+                match =  re.search(self.filter["word"], word[1])
                 if match:
                     self.matchobject["word"][word[0]] = True
                     wordMatch = True
@@ -458,7 +457,7 @@ class AnnotationTreeFilter(object):
             if not self.contained_matches or wordMatch:
                 for morpheme in word[2]:
                     if self.filter["morpheme"] != "":
-                        match = regex.search(self.filter["morpheme"], morpheme[1])
+                        match = re.search(self.filter["morpheme"], morpheme[1])
                         if match:
                             self.matchobject["word"][word[0]] = True   
                             morphemeMatch = True
@@ -469,7 +468,7 @@ class AnnotationTreeFilter(object):
                     if not self.contained_matches or morphemeMatch:
                         if self.filter["gloss"] != "":
                             for gloss in morpheme[2]:
-                                match = regex.search(self.filter["gloss"], gloss[1])
+                                match = re.search(self.filter["gloss"], gloss[1])
                                 if match:
                                     self.matchobject["word"][word[0]] = True
                                     glossMatch = True
