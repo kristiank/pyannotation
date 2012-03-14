@@ -15,13 +15,12 @@ import pyannotation.data
 
 from copy import deepcopy
 
-from xml.etree import ElementTree as ET
-from xml.etree.ElementTree import Element
+from lxml import etree as ET
+from lxml.etree import Element
 from xml.parsers import expat
 
 
 ############################################# Builders
-import operator
 
 class EafAnnotationFileObject(pyannotation.data.AnnotationFileObject):
 
@@ -97,12 +96,12 @@ class EafAnnotationFileTierHandler(pyannotation.data.AnnotationFileTierHandler):
     def __init__(self, annotationFileObject):
         pyannotation.data.AnnotationFileTierHandler.__init__(self, annotationFileObject)
         self.eaf = annotationFileObject.getFile()
-        self.UTTERANCETIER_TYPEREFS = [ "utterance", "utterances", "Äußerung", "Äußerungen" ]
-        self.WORDTIER_TYPEREFS = [ "words", "word", "Wort", "Worte", "Wörter" ]
+        self.UTTERANCETIER_TYPEREFS = [ "utterance", "utterances", u"Äußerung", u"Äußerungen" ]
+        self.WORDTIER_TYPEREFS = [ "words", "word", "Wort", "Worte", u"Wörter" ]
         self.MORPHEMETIER_TYPEREFS = [ "morpheme", "morphemes",  "Morphem", "Morpheme" ]
         self.GLOSSTIER_TYPEREFS = [ "glosses", "gloss", "Glossen", "Gloss", "Glosse" ]
         self.POSTIER_TYPEREFS = [ "part of speech", "parts of speech", "Wortart", "Wortarten" ]
-        self.TRANSLATIONTIER_TYPEREFS = [ "translation", "translations", "Übersetzung",  "Übersetzungen" ]
+        self.TRANSLATIONTIER_TYPEREFS = [ "translation", "translations", u"Übersetzung",  u"Übersetzungen" ]
 
     def setUtterancetierType(self, type):
         if isinstance(type, list):
@@ -205,12 +204,9 @@ class EafAnnotationFileParser(pyannotation.data.AnnotationFileParser):
         return self.lastUsedAnnotationId
 
     def parse(self):
-        """
-        
-        """
         tree = []
         self.utteranceTierIds = self.tierBuilder.getUtterancetierIds()
-        if self.utteranceTierIds:
+        if self.utteranceTierIds != []:
             for uTier in self.utteranceTierIds:
                 utterancesIds = self.eaf.getAlignableAnnotationIdsForTier(uTier) + self.eaf.getRefAnnotationIdsForTier(uTier)
                 for uId in utterancesIds:
@@ -231,7 +227,7 @@ class EafAnnotationFileParser(pyannotation.data.AnnotationFileParser):
                         wordsIds = self.eaf.getSubAnnotationIdsForAnnotationInTier(uId, uTier, wTier)
                         for wordId in wordsIds:
                             ilElements.append(self.getIlElementForWordId(wordId, wTier))
-                        if not ilElements:
+                        if len(ilElements) == 0:
                             ilElements = self.emptyIlElement
                     tree.append([ uId,  utterance,  ilElements, translations, locale, participant, uTier ])
         else: # if self.utterancesTiers != []
@@ -341,7 +337,12 @@ class EafAnnotationFileParser(pyannotation.data.AnnotationFileParser):
 class EafAnnotationFileParserPos(EafAnnotationFileParser):
 
     def __init__(self, annotationFileObject, annotationFileTiers):
-        EafTree.__init__(self, annotationFileObject, annotationFileTiers)
+        pyannotation.data.AnnotationFileParser.__init__(self, annotationFileObject, annotationFileTiers)
+#        EafTree.__init__(self, annotationFileObject, annotationFileTiers)
+        self.tierBuilder = annotationFileTiers
+        self.eaf = annotationFileObject.getFile()
+        self.lastUsedAnnotationId = self.eaf.getLastUsedAnnotationId()
+        self.emptyIlElement = [ ['', '',  [ ['', '',  [ ['',  ''] ] ] ] ] ]
 
     def getIlElementForWordId(self, id, wTier):
         ilElement = []
@@ -362,7 +363,12 @@ class EafAnnotationFileParserPos(EafAnnotationFileParser):
 class EafAnnotationFileParserWords(EafAnnotationFileParser):
 
     def __init__(self, annotationFileObject, annotationFileTiers):
-        EafTree.__init__(self, annotationFileObject, annotationFileTiers)
+        pyannotation.data.AnnotationFileParser.__init__(self, annotationFileObject, annotationFileTiers)
+#        EafTree.__init__(self, annotationFileObject, annotationFileTiers)
+        self.tierBuilder = annotationFileTiers
+        self.eaf = annotationFileObject.getFile()
+        self.lastUsedAnnotationId = self.eaf.getLastUsedAnnotationId()
+        self.emptyIlElement = [ ['', '',  [ ['', '',  [ ['',  ''] ] ] ] ] ]
 
     def getIlElementForWordId(self, id, wTier):
         ilElement = []
@@ -394,7 +400,7 @@ class EafFromToolboxAnnotationFileParser(pyannotation.data.AnnotationFileParser)
             utterancesIds = self.eaf.getAlignableAnnotationIdsForTier(uTier) + self.eaf.getRefAnnotationIdsForTier(uTier)
             for uId in utterancesIds:
                 utterance = self.eaf.getAnnotationValueForAnnotation(uTier, uId)
-                utterance = re.sub(r"[\n\r\t ]+", " ", utterance)
+                utterance = re.sub(r" +", " ", utterance)
 
                 refId = self.eaf.getRefAnnotationIdForAnnotationId(uTier, uId)
                 toolboxId = self.eaf.getAnnotationValueForAnnotation("ref", refId)
@@ -443,8 +449,6 @@ class EafFromToolboxAnnotationFileParser(pyannotation.data.AnnotationFileParser)
                     ilElements = [ ['', '',  [ ['', '',  [ ['',  ''] ] ] ] ] ]
 
                 tree.append([ toolboxId,  utterance,  ilElements, translations, locale, participant, uTier ])
-                
-        tree.sort()
         return tree
 
 ####################################### Files
@@ -515,6 +519,11 @@ class Eaf(object):
                 if i > lastId:
                     lastId = i
         return lastId
+
+    def setLastUsedAnnotationId(self, newAnnotationId):
+        """sets the header property last used annotation id"""
+        a = self.tree.find("HEADER/PROPERTY[@NAME='lastUsedAnnotationId']")
+        a.text = str(newAnnotationId)
 
     def getTierIdsForLinguisticType(self, type, parent = None):
         ret = []
@@ -719,7 +728,7 @@ class Eaf(object):
             if id:
                 ts[id] = iAStartTs
         # sort ids via start timestamp
-        alist = sorted(ts.items(), key=operator.itemgetter(1))
+        alist = sorted(ts.iteritems(), key=lambda (k,v): (v,k))
         for k, v in alist:
             ret.append(k)
         return ret
@@ -773,6 +782,67 @@ class Eaf(object):
         a.text = strAnnotation
         return True
 
+    def getLastUsedTimeSlotId(self):
+        lastId = 0
+        timeslots = self.tree.findall("TIME_ORDER/TIME_SLOT")
+        for ts in timeslots:
+            i = ts.attrib['TIME_SLOT_ID']
+            i = int(re.sub(r"\D", "", i))
+            if i > lastId:
+                lastId = i
+        return lastId
+
+    def addTimeOrder(self):
+        times = self.tree.find("TIME_ORDER")
+        if times is None:
+            times = ET.SubElement(self.tree.getroot(), "TIME_ORDER")
+        return times
+
+    def getTimeOrderTree(self):
+        return self.addTimeOrder()
+
+    def addTimeSlot(self, tsId, tsStartMs, tsEndMs=None):
+        times = self.getTimeOrderTree()
+        if tsId is None:
+            tsId = self.getLastUsedTimeSlotId() + 1
+        newtimeslot = ET.SubElement(times,
+                                    "TIME_SLOT",
+                                    TIME_SLOT_ID = str(tsId),
+                                    TIME_VALUE = str(tsStartMs))
+        if tsEndMs is None:
+            return tsId
+        else:
+            return (tsId, addTimeSlot(None, tsEndMs))
+
+    def setTsForAnnotation(self, idTier, idAnnotation, idTimeSlotStart, idTimeSlotEnd=None):
+        times = self.getTimeOrderTree()
+        if not self.linguisticTypeIsTimeAlignable(self.getLinguisticTypeForTier(idTier)):
+            return False
+        a = self.tree.find("TIER[@TIER_ID='%s']/ANNOTATION/ALIGNABLE_ANNOTATION[@ANNOTATION_ID='%s']" % (idTier, idAnnotation))
+        if idTimeSlotStart is not None:
+            a.attrib['TIME_SLOT_REF1'] = str(idTimeSlotStart)
+        if idTimeSlotEnd is not None:
+            a.attrib['TIME_SLOT_REF2'] = str(idTimeSlotEnd)
+
+    def addAnnotationToTier(self, idTier, strAnnotation, tsStartMs = None, tsEndMs = None):
+        tsDefaultLengthMs = 500
+        idAnnotation = self.getLastUsedAnnotationId() + 1
+        self.setLastUsedAnnotationId(idAnnotation)
+        if tsStartMs is None:
+            tsStartMs = idAnnotation * tsDefaultLengthMs
+            if tsEndMs is None:
+                tsEndMs = tsStartMs + tsDefaultLengthMs
+#        tiertype = self.getLinguisticTypeForTier(idTier)
+        tierelem = self.tree.find("TIER[@TIER_ID='%s']" % idTier)
+        annotationelem = ET.SubElement(tierelem, "ANNOTATION")
+        alignableelem = ET.SubElement(annotationelem, "ALIGNABLE_ANNOTATION")
+        annotationvalueelem = ET.SubElement(alignableelem, "ANNOTATION_VALUE")
+        alignableelem.attrib["ANNOTATION_ID"] = str(idAnnotation)
+        annotationvalueelem.text = strAnnotation
+        idTsStartMs = self.addTimeSlot(None, tsStartMs)
+        idTsEndMs = self.addTimeSlot(None, tsEndMs)
+        self.setTsForAnnotation(idTier, idAnnotation, idTsStartMs, idTsEndMs)
+
     def updatePrevAnnotationForAnnotation(self, idAnnotation, idPrevAnn = None):
         # this will just do nothing for time-aligned tiers
         # if idPrevAnn is None, then the attribute will be removed
@@ -783,6 +853,9 @@ class Eaf(object):
             else:
                 a.attrib['PREVIOUS_ANNOTATION'] = idPrevAnn
 
+    def writeToFile(self, filepath, encoding="UTF-8"):
+        """writes the eaf tree as pretty-print xml in filepath"""
+        self.tree.write(filepath, encoding=encoding)
 
 class EafPythonic(object):
     
@@ -873,26 +946,20 @@ class EafPythonic(object):
         if annRef != None and prevAnn == None:
             idByTierIdAndAnnRef = "%s.%s" % (idTier, annRef)
             if idByTierIdAndAnnRef in self.refAnnotationsDictByTierAndAnnRef:
-                ret = self.refAnnotationsDictByTierAndAnnRef[idByTierIdAndAnnRef]
-                #ret.sort()
-                return ret
+                return self.refAnnotationsDictByTierAndAnnRef[idByTierIdAndAnnRef]
             else:
                 return []
         else:
-            ret = [ id for id in self.refAnnotationsDict
+            return [ id for id in self.refAnnotationsDict
                     if self.refAnnotationsDict[id]["tierId"] == idTier
                     and (annRef == None or self.refAnnotationsDict[id]["annRef"] == annRef)
                     and (prevAnn == None or self.refAnnotationsDict[id]["prevAnn"] == prevAnn)]
-            #ret.sort()
-            return ret
 
     def getAlignableAnnotationIdsForTier(self, idTier, startTs = None,  endTs = None):
-        ret = [ id for id in self.alignableAnnotationsDict
+        return [ id for id in self.alignableAnnotationsDict
                 if self.alignableAnnotationsDict[id]["tierId"] == idTier
                 and (startTs == None or self.alignableAnnotationsDict[id]["ts1"] == startTs)
                 and (endTs == None or self.alignableAnnotationsDict[id]["ts2"] == endTs)]
-        #ret.sort()
-        return ret
 
     def getStartTsForAnnotation(self, idTier, idAnn):
         return self.alignableAnntotationsDict[idAnn]["ts1"]
@@ -969,7 +1036,7 @@ class Xml2Obj(object):
 
     def characterData(self, data):
         'Expat character data event handler'
-        if data: # .strip( )
+        if data.strip( ):
             #data = data.decode("utf-8")
             #data = data.encode( )
             element = self.nodeStack[-1]
